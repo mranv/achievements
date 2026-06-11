@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/safe-lib
+source "$SCRIPT_DIR/safe-lib"
+
+load_safe_env
+require_tools
+
+if [ "${1:-}" != "--delete-repo" ]; then
+  echo "[SAFE]: leaving '$REPO_FULL_NAME' intact. Pass --delete-repo to delete the private lab repo."
+  exit 0
+fi
+
+owner="$(gh repo view "$REPO_FULL_NAME" --json owner --jq .owner.login)"
+private="$(gh repo view "$REPO_FULL_NAME" --json isPrivate --jq .isPrivate)"
+
+if [ "$owner" != "$GITHUB_OWNER" ] || [ "$private" != "true" ]; then
+  echo "[ERROR]: Refusing to delete anything except a private repo owned by '$GITHUB_OWNER'." >&2
+  exit 1
+fi
+
+rm -rf "$LAB_DIR"
+gh repo delete "$REPO_FULL_NAME" --yes
