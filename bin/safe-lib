@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+safe_root() {
+  git rev-parse --show-toplevel 2>/dev/null || pwd
+}
+
+load_safe_env() {
+  ROOT_DIR="$(safe_root)"
+  SAFE_ENV_FILE="${SAFE_ENV_FILE:-$ROOT_DIR/.env.safe}"
+  local env_github_owner="${GITHUB_OWNER:-}"
+  local env_repo_name="${REPO_NAME:-}"
+  local env_workdir="${WORKDIR:-}"
+  local env_sleep_seconds="${SLEEP_SECONDS:-}"
+  local env_pullshark_iterations="${PULLSHARK_ITERATIONS:-}"
+  local env_pair_iterations="${PAIR_ITERATIONS:-}"
+
+  if [ -f "$SAFE_ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    source "$SAFE_ENV_FILE"
+  fi
+
+  GITHUB_OWNER="${env_github_owner:-${GITHUB_OWNER:-$(gh api user --jq .login)}}"
+  REPO_NAME="${env_repo_name:-${REPO_NAME:-achievements-lab}}"
+  WORKDIR="${env_workdir:-${WORKDIR:-container}}"
+  SLEEP_SECONDS="${env_sleep_seconds:-${SLEEP_SECONDS:-40}}"
+  PULLSHARK_ITERATIONS="${env_pullshark_iterations:-${PULLSHARK_ITERATIONS:-2}}"
+  PAIR_ITERATIONS="${env_pair_iterations:-${PAIR_ITERATIONS:-1}}"
+  REPO_FULL_NAME="${GITHUB_OWNER}/${REPO_NAME}"
+  LAB_DIR="$ROOT_DIR/$WORKDIR/$REPO_NAME"
+}
+
+require_tools() {
+  command -v git >/dev/null || {
+    echo "[ERROR]: git is required for this immaculate undertaking." >&2
+    exit 1
+  }
+
+  command -v gh >/dev/null || {
+    echo "[ERROR]: gh is required for this painstakingly guarded endeavor." >&2
+    exit 1
+  }
+
+  gh auth status -h github.com >/dev/null
+}
+
+ensure_lab_repo() {
+  load_safe_env
+  require_tools
+
+  local owner private
+
+  if ! gh repo view "$REPO_FULL_NAME" >/dev/null 2>&1; then
+    gh repo create "$REPO_FULL_NAME" \
+      --private \
+      --description "Private achievement lab for carefully contained digital badge nonsense"
+  fi
+
+  owner="$(gh repo view "$REPO_FULL_NAME" --json owner --jq .owner.login)"
+  private="$(gh repo view "$REPO_FULL_NAME" --json isPrivate --jq .isPrivate)"
+
+  if [ "$owner" != "$GITHUB_OWNER" ]; then
+    echo "[ERROR]: Refusing to operate on repo owned by '$owner'; expected '$GITHUB_OWNER'." >&2
+    exit 1
+  fi
+
+  if [ "$private" != "true" ]; then
+    echo "[ERROR]: Refusing to operate on non-private repo '$REPO_FULL_NAME'." >&2
+    exit 1
+  fi
+
+  mkdir -p "$ROOT_DIR/$WORKDIR"
+
+  if [ ! -d "$LAB_DIR/.git" ]; then
+    gh repo clone "$REPO_FULL_NAME" "$LAB_DIR"
+  fi
+
+  cd "$LAB_DIR"
+  git remote set-url origin "https://github.com/$REPO_FULL_NAME.git"
+  git remote set-url --push origin "https://github.com/$REPO_FULL_NAME.git"
+  gh repo set-default "$REPO_FULL_NAME" >/dev/null
+
+  local default_repo
+  default_repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+  if [ "$default_repo" != "$REPO_FULL_NAME" ]; then
+    echo "[ERROR]: gh default repo is '$default_repo'; expected '$REPO_FULL_NAME'." >&2
+    exit 1
+  fi
+
+  git switch main >/dev/null 2>&1 || git switch -c main
+  if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    git commit --allow-empty -m "Initial private achievement lab commit"
+  fi
+
+  if git rev-parse --verify origin/main >/dev/null 2>&1; then
+    git pull --ff-only origin main
+  else
+    git push -u origin main
+  fi
+}
+
+guard_lab_repo() {
+  load_safe_env
+  require_tools
+
+  local current_repo private owner
+  current_repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+  if [ "$current_repo" != "$REPO_FULL_NAME" ]; then
+    echo "[ERROR]: gh points at '$current_repo'; expected '$REPO_FULL_NAME'." >&2
+    exit 1
+  fi
+
+  owner="$(gh repo view "$REPO_FULL_NAME" --json owner --jq .owner.login)"
+  private="$(gh repo view "$REPO_FULL_NAME" --json isPrivate --jq .isPrivate)"
+
+  if [ "$owner" != "$GITHUB_OWNER" ] || [ "$private" != "true" ]; then
+    echo "[ERROR]: Refusing to continue outside a private repo owned by '$GITHUB_OWNER'." >&2
+    exit 1
+  fi
+}
+
+generate_commit_message() {
+  local adjective noun purpose timestamp
+  local adjectives=("meticulously guarded" "fastidiously contained" "judiciously sandboxed" "expertly fenced" "painstakingly idiot-resistant")
+  local nouns=("commit message" "contribution" "iteration" "endeavor" "undertaking")
+  local purposes=("to encapsulate the essence of the impending achievement nonsense" "to capture the quintessence of the forthcoming badge wobble" "to epitomize the forthcoming safely-contained alteration" "to embody the imminent private-repo modification" "to personify the upcoming dumbdumb-proof revision")
+
+  adjective="${adjectives[$RANDOM % ${#adjectives[@]}]}"
+  noun="${nouns[$RANDOM % ${#nouns[@]}]}"
+  purpose="${purposes[$RANDOM % ${#purposes[@]}]}"
+  timestamp="$(date +%s)"
+
+  echo "A $adjective $noun, $purpose. Iteration: ${1:-0}, Timestamp: $timestamp"
+}
+
+create_and_merge_pr() {
+  local branch="$1"
+  local title="$2"
+  local body="$3"
+  local pr_url mergeable
+
+  guard_lab_repo
+
+  git push -u origin "$branch"
+  pr_url="$(gh pr create \
+    --repo "$REPO_FULL_NAME" \
+    --base main \
+    --head "$GITHUB_OWNER:$branch" \
+    --title "$title" \
+    --body "$body")"
+
+  for _ in {1..10}; do
+    mergeable="$(gh pr view "$pr_url" --repo "$REPO_FULL_NAME" --json mergeable --jq .mergeable)"
+    [ "$mergeable" != "UNKNOWN" ] && break
+    sleep 2
+  done
+
+  gh pr merge "$pr_url" --repo "$REPO_FULL_NAME" --merge --delete-branch
+  git switch main >/dev/null
+  git fetch --prune origin
+  git pull --ff-only origin main
+  git branch -D "$branch" >/dev/null 2>&1 || true
+
+  echo "[OK]: merged $pr_url"
+}
+
+prepare_branch() {
+  local branch="$1"
+  git switch main >/dev/null
+  git switch -C "$branch" >/dev/null
+}

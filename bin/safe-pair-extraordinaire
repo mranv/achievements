@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/safe-lib
+source "$SCRIPT_DIR/safe-lib"
+
+ensure_lab_repo
+
+for i in $(seq 1 "$PAIR_ITERATIONS"); do
+  branch="pair-extraordinaire-$i-$(date +%s)"
+  prepare_branch "$branch"
+  git commit --allow-empty -m $'An empty commit, now with an immaculate entourage.\n\nCo-authored-by: Linus Torvalds <torvalds@linux-foundation.org>\nCo-authored-by: Guido van Rossum <guido@python.org>\nCo-authored-by: Brendan Eich <brendan@mozilla.org>\nCo-authored-by: Bjarne Stroustrup <bs@cs.tamu.edu>\nCo-authored-by: James Gosling <james.gosling@oracle.com>\nCo-authored-by: Dennis Ritchie <dmr@bell-labs.com>\nCo-authored-by: Ken Thompson <ken@github.com>\nCo-authored-by: Donald Knuth <knuth@stanford.edu>\nCo-authored-by: Grace Hopper <grace@navy.mil>\nCo-authored-by: Ada Lovelace <ada@lovelace.org>\nCo-authored-by: Alan Turing <alan@turing.gov>\nCo-authored-by: Margaret Hamilton <margaret@nasa.gov>\nCo-authored-by: Tim Berners-Lee <timbl@w3.org>\nCo-authored-by: Yukihiro Matsumoto <matz@ruby-lang.org>\nCo-authored-by: Larry Wall <larry@perl.org>\nCo-authored-by: Anders Hejlsberg <anders@microsoft.com>\nCo-authored-by: John Carmack <jcarmack@idsoftware.com>\nCo-authored-by: Rasmus Lerdorf <rasmus@php.net>\nCo-authored-by: Danese Cooper <danese@paypal.com>\nCo-authored-by: Satya Nadella <satyan@microsoft.com>'
+  create_and_merge_pr \
+    "$branch" \
+    "pair-extraordinaire: a fastidiously contained co-authorship parade #$i" \
+    "Created by safe-pair-extraordinaire after verifying the repo is private, self-owned, and explicitly addressed by --repo/--head."
+  sleep "$SLEEP_SECONDS"
+done

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+"$SCRIPT_DIR/safe-quickdraw"
+"$SCRIPT_DIR/safe-yolo"
+"$SCRIPT_DIR/safe-pair-extraordinaire"
+"$SCRIPT_DIR/safe-pullshark"

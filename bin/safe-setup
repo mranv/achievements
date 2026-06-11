@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/safe-lib
+source "$SCRIPT_DIR/safe-lib"
+
+ensure_lab_repo
+echo "$REPO_FULL_NAME"

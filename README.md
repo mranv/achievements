@@ -51,6 +51,23 @@ bash all
 
 **Warning:** This might take several hours. Perfect for when you have absolutely nothing better to do. Just let it run in the background while you contemplate your life choices.
 
+### Running Achievement Scripts, But With Guardrails
+
+If your fork has ever stared deep into `gh pr create` and wondered which
+repository it was about to bless with badge-generation nonsense, use the safe
+wrappers instead:
+
+```bash
+cp .env.safe.example .env.safe
+bash bin/safe-all
+```
+
+The safe wrappers create or reuse a private repository under your own account,
+set the GitHub CLI default repository explicitly, verify that the target is
+private and self-owned, and pass `--repo`, `--base`, and `--head` to every pull
+request command. This is the painstakingly idiot-resistant path for anyone who
+prefers their achievement archaeology not to become an accidental upstream PR.
+
 ---
 
 ### Professional Commitment
